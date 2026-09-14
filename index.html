@@ -2,7 +2,12 @@
 <html lang="zh-Hant" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI對話訓練">
+<meta name="theme-color" content="#0b0b0e">
 <title>AI對話訓練</title>
 <style>
 :root{
@@ -238,13 +243,40 @@ label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 4px}
 
 /* RWD */
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:25;display:none}
+/* ===== 手機版 ===== */
+#hdrRest{display:contents}          /* 寬螢幕:當作不存在,按鈕照常排在標題列 */
+#btnMore{display:none}
 @media (max-width:860px){
-  #sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:.2s;width:300px}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:.2s;width:min(300px,84vw);z-index:60}
   #sidebar.open{transform:none}
   #overlay.show{display:block}
   #btnSidebar{display:inline-flex}
   .msg{padding:10px 12px}
   .msg-actions{right:12px}
+  /* 標題列:只留 📍🎭 與 ⋯,其餘收進下拉選單,免得擠成兩行 */
+  #btnMore{display:inline-flex}
+  #hdrRest{display:none;position:absolute;top:46px;right:8px;z-index:70;
+    flex-direction:column;gap:2px;padding:6px;border-radius:12px;
+    background:var(--panel);border:1px solid var(--border);box-shadow:0 10px 28px rgba(0,0,0,.45)}
+  #hdrRest.open{display:flex}
+  #hdrRest .icon-btn{width:auto;height:36px;padding:0 12px;justify-content:flex-start;font-size:17px}
+  #hdrRest .icon-btn::after{content:attr(title);font-size:13px;margin-left:9px;color:var(--text)}
+  #chatTitle{font-size:14px}
+  .hdr-sel{max-width:42vw}
+  /* 輸入列的功能鈕縮小一點,才塞得下輸入框 */
+  #inputBar .icon-btn{width:30px;height:30px;font-size:15px}
+  #input{font-size:16px}            /* iOS:小於 16px 會自動放大整頁 */
+  #imInput{font-size:16px}
+}
+/* 手機上的立繪/場景:改成蓋在上面的浮層,不再直接隱藏 */
+@media (max-width:1020px){
+  body.stage-float #stageR{display:block;position:fixed;inset:46px 0 0 0;width:auto;z-index:55;
+    border:0;border-top:1px solid var(--border)}
+  body.stage-float #stageR .panel-fold{display:none}
+  #stageClose{display:none}
+  body.stage-float #stageClose{display:flex;position:fixed;top:54px;right:12px;z-index:56;
+    width:36px;height:36px;align-items:center;justify-content:center;border-radius:50%;
+    background:var(--panel);border:1px solid var(--border);color:var(--text);font-size:18px;cursor:pointer}
 }
 
 /* ============ 舞台與場景 ============ */
@@ -525,7 +557,7 @@ body.locked{overflow:hidden}
 <div id="app">
   <aside id="sidebar">
     <div id="sideHead">
-      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v86</span></div>
+      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v87</span></div>
     </div>
     <div class="side-tabs">
       <button data-tab="chars" class="active">角色</button>
@@ -698,12 +730,15 @@ body.locked{overflow:hidden}
       <div class="spacer"></div>
       <button id="btnScenePick" class="icon-btn" title="移動場景">📍</button>
       <button id="btnStage" class="icon-btn" title="舞台面板開關">🎭</button>
-      <button id="btnSummary" class="icon-btn" title="劇情摘要">📜</button>
-      <button id="btnStatusToggle" class="icon-btn" title="狀態欄">📊</button>
-      <button id="btnPromptView" class="icon-btn" title="檢視實際送給模型的內容">🔍</button>
-      <button id="btnFont" class="icon-btn" title="調整文字大小">🔠</button>
-      <button id="btnTheme" class="icon-btn" title="切換深/淺主題">🌓</button>
-      <button id="btnHelp" class="icon-btn" title="使用說明">❓</button>
+      <div id="hdrRest">
+        <button id="btnSummary" class="icon-btn" title="劇情摘要">📜</button>
+        <button id="btnStatusToggle" class="icon-btn" title="狀態欄">📊</button>
+        <button id="btnPromptView" class="icon-btn" title="檢視實際送給模型的內容">🔍</button>
+        <button id="btnFont" class="icon-btn" title="調整文字大小">🔠</button>
+        <button id="btnTheme" class="icon-btn" title="切換深/淺主題">🌓</button>
+        <button id="btnHelp" class="icon-btn" title="使用說明">❓</button>
+      </div>
+      <button id="btnMore" class="icon-btn" title="更多">⋯</button>
     </header>
 
     <div id="mainBody">
@@ -797,6 +832,7 @@ body.locked{overflow:hidden}
   <div class="lock-corner" data-k="br"></div>
   <div id="lockDots">○○○○</div>
 </div>
+<button id="stageClose" title="關閉立繪面板">✕</button>
 <div id="imScreen" class="hidden">
   <div id="imPhone">
     <div id="imHead">
@@ -6745,10 +6781,31 @@ function bindEvents() {
     if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); cmdHelperInsert(); }
   });
   $('#btnScenePick').onclick = () => { if (activeChat()) openScenePicker(); else toast('先開一個聊天'); };
+  /* 🎭 舞台:寬螢幕照舊開關側邊面板;窄螢幕(手機)改成蓋上來的浮層,
+     不然點了完全沒反應——舊版只會跳一句「只在寬螢幕顯示」,等於手機看不到立繪。*/
   $('#btnStage').onclick = () => {
+    if (window.innerWidth <= 1020) {
+      const on = !document.body.classList.contains('stage-float');
+      document.body.classList.toggle('stage-float', on);
+      if (on) { S.settings.stageOn = true; S.settings.stageROn = true; save(); renderStage(); }
+      return;
+    }
+    document.body.classList.remove('stage-float');
     S.settings.stageOn = !S.settings.stageOn; save(); renderStage();
-    if (S.settings.stageOn && window.innerWidth <= 1000) toast('舞台面板只在寬螢幕(>1000px)顯示');
   };
+  $('#stageClose').onclick = () => document.body.classList.remove('stage-float');
+  // ⋯ 更多:手機標題列的下拉選單
+  $('#btnMore').onclick = (e) => { e.stopPropagation(); $('#hdrRest').classList.toggle('open'); };
+  $('#hdrRest').onclick = () => $('#hdrRest').classList.remove('open');   // 點任一項就收起來
+  document.addEventListener('click', (e) => {
+    const m = $('#hdrRest');
+    if (m && m.classList.contains('open') && !m.contains(e.target) && e.target !== $('#btnMore')) m.classList.remove('open');
+  });
+  // 轉成寬螢幕就把手機專用的浮層狀態清掉,免得卡住
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 1020) document.body.classList.remove('stage-float');
+    if (window.innerWidth > 860) $('#hdrRest').classList.remove('open');
+  });
   $('#stageSceneName').onclick = openScenePicker;
   const port = $('#stagePortrait');
   port.onload = () => { port.style.opacity = 1; layoutZones(lastStageCh); };
