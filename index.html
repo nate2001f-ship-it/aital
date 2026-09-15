@@ -535,14 +535,22 @@ label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 4px}
 .im-narr{align-self:center;max-width:92%;margin:10px 0;padding:5px 14px;border-radius:12px;
   background:rgba(20,28,40,.32);color:#f0f4f8;font-size:12px;line-height:1.7;text-align:center;
   font-style:italic;cursor:pointer}
-#imMode{width:34px;height:34px;flex:0 0 auto;border:1px solid #d7dae0;border-radius:50%;
-  background:#fff;font-size:15px;cursor:pointer;align-self:flex-end}
-#imMode.narr{background:#1f2733;border-color:#1f2733}
+/* ⚠ 本來做成只有 💬 的小圓鈕,結果沒人知道那是模式切換 —— 真正的 LINE 在同一個位置
+   放的是【貼圖鈕】,直覺上不會有人去點它。改成有文字的膠囊,一眼看得出現在是哪個模式。*/
+#imMode{height:34px;flex:0 0 auto;border:1px solid #d7dae0;border-radius:17px;padding:0 11px;
+  background:#fff;color:#111;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-end;white-space:nowrap}
+#imMode.narr{background:#1f2733;border-color:#1f2733;color:#fff}
 #imFoot.narr #imInput{background:#eef1f6;border-style:dashed}
 /* 主線裡的通訊訊息:左邊加一條綠線,一眼看得出這段是用傳的 */
 .msg.via-im{border-left:3px solid #06c755}
 .msg-im-tag{display:inline-block;font-size:10.5px;color:#06c755;border:1px solid #06c755;
   border-radius:8px;padding:0 6px;margin-right:6px;vertical-align:1px}
+.msg-narr-tag{display:inline-block;font-size:10.5px;color:var(--muted);border:1px solid var(--border);
+  border-radius:8px;padding:0 6px;margin-right:6px;vertical-align:1px}
+.msg.narr .msg-text{font-style:italic;color:var(--muted)}
+.msg.narr{border-left:3px solid var(--border)}
+#btnNarr.on,#btnAsWho.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+#btnNarr,#btnAsWho{align-self:flex-end;width:34px;height:34px;flex:0 0 auto;border:1px solid var(--border)}
 #lockScreen{position:fixed;inset:0;z-index:9999;background:#0b0b0e}
 #lockScreen.gone{opacity:0;pointer-events:none;transition:opacity .25s}
 body.locked{overflow:hidden}
@@ -561,7 +569,7 @@ body.locked{overflow:hidden}
 <div id="app">
   <aside id="sidebar">
     <div id="sideHead">
-      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v89</span></div>
+      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v92</span></div>
     </div>
     <div class="side-tabs">
       <button data-tab="chars" class="active">角色</button>
@@ -802,6 +810,8 @@ body.locked{overflow:hidden}
       <button id="btnSeq" class="icon-btn" title="自動編排:指定角色發話順序(如 A B C B A)+劇情提示,自動連續生成打鬥/對話">🎬</button>
       <button id="btnAutoPlay" class="icon-btn" title="AI 自動演出:設定情境、衝突與各角色私下目標,讓三四個角色自己對戲">🎭</button>
       <button id="btnIM" class="icon-btn" title="💬 打通訊軟體:開一個像 LINE 的視窗傳訊息,角色知道自己在打字,記憶沿用這場對話">💬</button>
+      <button id="btnNarr" class="icon-btn" title="🎬 旁白模式:接下來打的是【實際發生的事】(某人做了什麼、環境變化),不是你說的話">🎬</button>
+      <button id="btnAsWho" class="icon-btn" title="用誰的身分說話:預設是你自己,可以臨時改成扮演某個角色">🧑</button>
       <textarea id="input" rows="1" placeholder="輸入訊息…(Enter 送出,Shift+Enter 換行)"></textarea>
       <button id="btnSend" class="btn primary">送出</button>
     </div>
@@ -852,7 +862,7 @@ body.locked{overflow:hidden}
     </div>
     <div id="imBody"></div>
     <div id="imFoot">
-      <button id="imMode" title="切換:傳訊息 / 下旁白(實際發生的事,不是傳給對方的訊息)">💬</button>
+      <button id="imMode" title="切換:傳訊息 / 下旁白(實際發生的事,不是傳給對方的訊息)">💬 訊息</button>
       <textarea id="imInput" rows="1" placeholder="輸入訊息"></textarea>
       <button id="imSend" title="送出">➤</button>
     </div>
@@ -1788,6 +1798,16 @@ function buildContext(chat, targetCharId, opts = {}) {
   rules.push(imMode
     ? '回覆格式:你正在手機上打字,輸出的就是訊息內容本身。不要用「」或『』括住(訊息不需要引號),不要寫動作、神態、場景、旁白或內心獨白,不要用星號或括號描述行為。想表達情緒就用文字、標點或表情符號表達,就像真的在傳訊息一樣。'
     : '回覆格式:說出口的對白用「」括起;內心想法、沒說出口的話用『』括起;動作與場景敘述直接寫成一般文字,不要用星號或斜體標記。');
+  // 🎭 使用者臨時扮演其他角色時,要講清楚那個人是誰在操作,否則模型會搶著替他演
+  const actedIds = [...new Set(visible.filter(m => m.role === 'user' && m.asChar).map(m => m.asChar))];
+  const actedNames = actedIds.map(id => (getChar(id) || {}).name).filter(Boolean);
+  if (actedNames.length) {
+    rules.push(`【由使用者操作的角色】對話紀錄中標著「${actedNames.join('」「')}(由${persona.name || '使用者'}操作)」的發言,是${persona.name || '使用者'}親自扮演那個角色說出來的話,不是你說的、也不是你要演的角色。請把他們當成【現場另一個會說話的人】來反應,絕對不要替他們發言、不要續寫他們的台詞、也不要在回覆裡代他們做決定。`);
+  }
+  if (!imMode) {
+    /* 使用者用括號下舞台指示是很常見的習慣,不講清楚的話模型會把它當成使用者「唸出」括號裡的字。*/
+    rules.push(`【使用者訊息裡的括號】${persona.name || '使用者'}的訊息中,用（）或()括起來的內容是【旁白/舞台指示】——那是實際發生的事、或是某個角色做出來的動作,不是${persona.name || '使用者'}說出口的話。要把它當成已經發生的事實照著演,絕對不要當成對方在講話、也不要讓角色對「他說了這句話」本身做反應。例:「（楊過舉起劍）」的意思是楊過真的舉起了劍,不是${persona.name || '使用者'}唸了這句話。若括號內描述的是你自己的動作,那就是你真的做了。`);
+  }
   rules.push('語言:一律用【繁體中文(台灣用語)】書寫,對白、動作描寫、內心話與狀態欄全部都是。角色卡或先前訊息裡若有簡體字或大陸用語,你的回覆要一律改用繁體與台灣說法(信息→訊息、質量→品質、視頻→影片、水平→水準、智能→智慧),不要跟著沿用。不要出現假名、韓文或簡體字,不要在中文句子裡夾外語單字,也不要用外語敬稱的音譯(醬、桑、君、內、斯…)或外語語尾(〜desu、〜da、〜ne)。角色若出自外語作品,說話習慣要用【中文裡效果相同的說法】表現:粗獷的自稱用「我」搭配短句與粗話而不是「俺」;貴氣的語氣用「呢、呀」而不是「〜ですわ」;敬語用「您、請」而不是敬體語尾。專有名詞用通行中譯。唯一例外是角色設定本身就會夾外語,那也只能少量,主體仍是中文。');
   rules.push('文風要求:用詞、口癖、自稱、說話節奏必須嚴格依照這個角色自己的「對話範例」與人設,不同角色的聲線要明顯區隔。\n【必須每次一致,不受下面的避免重複規則限制】這個角色的自稱、對他人的稱呼、語尾與口頭禪、招牌用語、專屬的說話節奏——這些是角色的identity,每一則回覆都要照樣出現,絕對不可以為了「換個說法」而改掉或省略。角色講話本來就會重複自己的口癖,那不是罐頭,那是這個角色。\n【要避免重複的只有這些】場景與動作的描寫、比喻、形容的角度、段落的組織方式:不要沿用先前回覆(包括其他角色的回覆)裡用過的描寫與比喻,同一個意思換一個具體的細節去寫。\n嚴禁罐頭化的誇張描寫——咬緊嘴唇、滲出血珠、渾身顫抖、指甲掐進掌心、「殺了我吧」這類自毀台詞等陳腔濫調,除非人設或劇情真的走到那一步;情緒表達要有層次,小事給小反應,不要把每一幕都演成生死關頭。');
   if (S.settings.sysExtra) rules.push(S.settings.sysExtra);
@@ -1799,7 +1819,7 @@ function buildContext(chat, targetCharId, opts = {}) {
       `你和${persona.name || '使用者'}正在用手機的通訊軟體傳訊息,不是面對面。你很清楚自己在打字。`,
       `・只輸出你【會打在對話框裡的文字】。不要寫動作描寫、神態描寫、場景敘述或旁白,也不要用「」『』括起來——訊息本身就是你說的話。`,
       `・【絕對禁止】任何形式的動作/神態/心理敘述,四種都不行:①星號(*皺眉*);②括號((嘆氣));③第三人稱句子(「她頓了一下,手指停在螢幕上」);④【第一人稱句子】(「我盯著螢幕,心頭微微一震」「我握緊了拳頭」)——第一人稱同樣是旁白,同樣禁止。你是在打字,對方只看得到你打出來的字,看不到你做了什麼、也讀不到你心裡想什麼。想表達情緒就用文字本身(例:把「我嘆了口氣」改成「唉」或「……」;把「我心頭一震」改成「等等」或「你說真的?」)。`,
-      `・收到標著[旁白]的內容時:那是【現實中真正發生的事】,不是有人傳訊息告訴你。若旁白寫的是你自己的動作,那就是你真的做了;若是別人的動作,你只有在現場看得到的情況下才知道。絕對不要把旁白當成對方傳來的訊息,也不要驚訝「這支手機怎麼知道我在做什麼」。`,
+      `・【旁白最重要的一條】收到標著[旁白]的內容時:那是【現實世界裡真正發生的事】,不是任何人傳訊息告訴你的。手機上【沒有出現】那段文字,沒有人打那句話給你。若旁白寫的是你自己的動作,那就是你真的做了(例:旁白說你舉起劍,你就是真的舉起了劍);若是別人的動作,你只有在現場看得到、聽得到的情況下才知道。絕對不要回應旁白這句話本身、不要複述它、不要驚訝「這支手機怎麼知道我在做什麼」、更不要懷疑對方在監視你。`,
       `・想描寫動作與場景的衝動請留到面對面的場合——使用者關掉通訊視窗回到主對話框時,才是演出動作的地方。`,
       `・你【看不到】對方現在的表情、動作、身處何地、在做什麼,除非對方用文字告訴你。不可以描寫或假設對方當下的動作與環境。`,
       `・像真的在傳訊息那樣寫:句子短、口語、可以不完整。想連傳好幾則就用【換行】分隔,程式會自動拆成一則一則的訊息氣泡(建議 1~4 則)。`,
@@ -1853,7 +1873,15 @@ ${banList.map(w => `・${w}`).join('\n')}
     const c = getChar(m.charId);
     // 🎬 旁白:實際發生的事,不是傳出去的訊息。標記必須跟訊息分開,否則角色會以為
     //    「有人傳訊息告訴我我在做什麼」(實測踩到:下「楊過舉起劍」→ 角色回「這東西怎麼知道我的動作?」)
-    if (m.narr) return { role: 'user', content: `[旁白·實際發生的事,不是傳給你的訊息] ${t}` };
+    if (m.narr) return { role: 'user', content: m.im
+      ? `[旁白·實際發生的事,不是傳給你的訊息] ${t}`
+      : `[旁白·實際發生的事,不是${persona.name || '使用者'}說出口的話] ${t}` };
+    // 🎭 使用者臨時扮演的角色:標成那個角色在說話,但仍是 user 角色,
+    //    這樣模型不會以為那是它要演的人、也不會替他再生成台詞
+    if (m.role === 'user' && m.asChar) {
+      const ac = getChar(m.asChar);
+      if (ac) return { role: 'user', content: `${ac.name}(由${persona.name || '使用者'}操作): ${t}` };
+    }
     if (m.role === 'user') return { role: 'user', content: (m.im ? '(手機訊息) ' : '') + (group ? `${persona.name || 'User'}: ${t}` : t) };
     return { role: 'assistant', content: group ? `${(c ? c.name : '?')}: ${t}` : t };
   }).filter(m => m.content && m.content.trim());
@@ -1866,6 +1894,19 @@ ${banList.map(w => `・${w}`).join('\n')}
     messages.push({ role: 'user', content: `[請直接接續你上一則回覆繼續寫下去,不要重複已寫過的內容,不要加任何開場白]` });
   } else if (group) {
     messages.push({ role: 'user', content: `[接下來輪到 ${target.name} 回應]` });
+  }
+  /* 🎬 旁白補強。
+     ⚠ 踩過:只在訊息前面加 [旁白] 標籤不夠 —— 那則仍然是 user 角色的訊息,
+       模型看到就當成「有人跟我講這句話」,還會反問「你怎麼知道我在做什麼」。
+       要在【最靠近生成點】的地方再講一次,而且明講「不要回應這句話本身」。*/
+  const lastVisible = visible[visible.length - 1];
+  if (lastVisible && lastVisible.narr) {
+    const nt = msgText(lastVisible);
+    messages.push({ role: 'user', content: `[重要:上面那則「${nt.slice(0, 40)}${nt.length > 40 ? '…' : ''}」是【旁白】,是現實中真正發生的事,${chat.imWith ? '不是任何人傳給你的訊息' : `不是${persona.name || '使用者'}說出口的話`}。
+・把它當成已經發生的事實,直接依照那件事做出反應。
+・如果旁白寫的是【你自己】的動作,那就是你真的做了那個動作,不要否認、不要驚訝、更不要問別人怎麼知道。
+・如果是別人的動作,你只有在現場看得到/聽得到的情況下才知道。
+・【絕對不要】把旁白當成一句話來回應,也不要複述或引用它的文字。]` });
   }
   if (target.statusEnabled && !opts.continueLast) {
     messages.push({ role: 'user', content: `[格式提醒:這則回覆的最後必須輸出 <status>…</status> 狀態欄]` });
@@ -4840,7 +4881,7 @@ function renderChat() {
       <button class="g-char" data-id="__undo" title="移除最後一個">⌫</button>
       <button class="g-char on" data-id="__go" title="依這個順序連續生成">▶ 依序發言(${gPicked.length})</button>` : '') +
     (chars.length > 1 && !gMulti ? `<button class="g-char ${chat.autoReply ? 'on' : ''}" data-id="__auto" title="開啟後,送出訊息就自動挑角色回覆:有喊到名字的優先,否則輪到最久沒說話的">⚡ 自動回覆:${chat.autoReply ? '開' : '關'}</button>` : '') +
-    (!gMulti ? `<button class="g-char" data-id="__add" title="把角色呼喚進來或請出去">＋ 呼喚角色</button>` : '');
+    (!gMulti ? `<button class="g-char" data-id="__add" title="加入新角色、或把現在的角色換掉/請出去">👥 加入/更換角色</button>` : '');
   gb.querySelectorAll('.g-char').forEach(b => b.onclick = () => {
     let id = b.dataset.id;
     if (id === '__add') { openSummonModal(); return; }
@@ -5089,7 +5130,7 @@ let imNarrMode = false;   // 💬 傳訊息 / 🎬 下旁白
 function imSetMode(on) {
   imNarrMode = !!on;
   const b = $('#imMode'), f = $('#imFoot'), i = $('#imInput');
-  if (b) { b.textContent = imNarrMode ? '🎬' : '💬'; b.classList.toggle('narr', imNarrMode); }
+  if (b) { b.textContent = imNarrMode ? '🎬 旁白' : '💬 訊息'; b.classList.toggle('narr', imNarrMode); }
   if (f) f.classList.toggle('narr', imNarrMode);
   if (i) i.placeholder = imNarrMode ? '旁白:實際發生的事(例:楊過舉起劍)' : '輸入訊息';
 }
@@ -5244,12 +5285,15 @@ function renderMsg(m, idx) {
   const chat = activeChat();
   const isUser = m.role === 'user';
   const isStory = m.role === 'story';
-  const c = (isUser || isStory) ? null : getChar(m.charId);
-  const name = isStory ? '📜 前情提要(已發生的事)' : isUser ? (S.settings.persona.name || 'User') : (c ? c.name : '角色');
+  const actedAs = (isUser && m.asChar) ? getChar(m.asChar) : null;   // 🎭 你臨時扮演的角色
+  const c = (isUser || isStory) ? actedAs : getChar(m.charId);
+  const name = isStory ? '📜 前情提要(已發生的事)'
+    : isUser ? (actedAs ? `${actedAs.name}(你扮演)` : (S.settings.persona.name || 'User'))
+    : (getChar(m.charId) ? getChar(m.charId).name : '角色');
   const sw = m.swipes[m.swipeIndex] || m.swipes[0];
   const isLast = idx === chat.messages.length - 1;
   const el = document.createElement('div');
-  el.className = 'msg' + (isUser ? ' user' : '') + (isStory ? ' story' : '') + (idx < (chat.summaryUpTo || 0) ? ' summarized' : '') + (m.im ? ' via-im' : '');
+  el.className = 'msg' + (isUser ? ' user' : '') + (isStory ? ' story' : '') + (idx < (chat.summaryUpTo || 0) ? ' summarized' : '') + (m.im ? ' via-im' : '') + (m.narr ? ' narr' : '');
   el.dataset.id = m.id;
 
   const actions = [];
@@ -5277,9 +5321,9 @@ function renderMsg(m, idx) {
     else if (sw.text.length >= STORY_DIGEST_MIN) storyChip = `<div class="story-chip clickable" data-sc="make">⚠ 尚未摘要,AI 每次都會讀整段全文(${sw.text.length} 字)——點我自動摘要</div>`;
   }
 
-  el.innerHTML = `${isStory ? '<div class="avatar story-av">📜</div>' : isUser ? avatarHTML(null) : avatarHTML(c)}
+  el.innerHTML = `${isStory ? '<div class="avatar story-av">📜</div>' : isUser ? avatarHTML(actedAs) : avatarHTML(getChar(m.charId))}
     <div class="msg-body">
-      <div class="msg-head">${m.im ? '<span class="msg-im-tag" title="這則是在通訊軟體裡傳的">💬 訊息</span>' : ''}<span class="msg-name">${esc(name)}</span><span class="msg-time">${nowStr(m.ts)}</span></div>
+      <div class="msg-head">${m.narr ? '<span class="msg-narr-tag" title="旁白:實際發生的事,不是你說的話">🎬 旁白</span>' : ''}${m.im ? '<span class="msg-im-tag" title="這則是在通訊軟體裡傳的">💬 訊息</span>' : ''}<span class="msg-name">${esc(name)}</span><span class="msg-time">${nowStr(m.ts)}</span></div>
       <div class="msg-text">${fmtMsg(macro(m.im ? stripImTag(stripStatus(sw.text)) : stripStatus(sw.text), c ? c.name : ''))}</div>
       ${storyChip}${statusChip}${swipeBar}
     </div>
@@ -6713,13 +6757,58 @@ function autosize() {
   t.style.height = 'auto';
   t.style.height = Math.min(180, t.scrollHeight) + 'px';
 }
+/* 🧑 臨時換身分:平常你是自己的 Persona,可以改成暫時扮演某個角色說話。
+   用 role:'user' 送出(不是 assistant),這樣模型不會以為那個角色是它要演的,
+   也不會因此替那個角色生成後續台詞。*/
+let asWhoId = null;   // null = 你自己
+function asWhoName() { const c = asWhoId ? getChar(asWhoId) : null; return c ? c.name : (S.settings.persona.name || '你自己'); }
+function asWhoSet(id) {
+  asWhoId = id && getChar(id) ? id : null;
+  const b = $('#btnAsWho');
+  if (b) {
+    b.classList.toggle('on', !!asWhoId);
+    b.textContent = asWhoId ? '🎭' : '🧑';
+    b.title = asWhoId ? `現在用「${asWhoName()}」的身分說話(點我換回你自己)` : '用誰的身分說話:預設是你自己,可以臨時改成扮演某個角色';
+  }
+  const t = $('#input');
+  if (t && !mainNarrMode) t.placeholder = asWhoId ? `以「${asWhoName()}」的身分說…(Enter 送出)` : '輸入訊息…(Enter 送出,Shift+Enter 換行)';
+}
+function openAsWhoPicker() {
+  const list = S.characters || [];
+  const m = modal('🎭 用誰的身分說話', `
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.8;margin:6px 0 10px">
+    平常你講的話是「${esc(S.settings.persona.name || '你自己')}」說的。選一個角色之後,你打的話會變成【那個角色說的】,AI 不會替他再生成台詞,而是把他當成在場說話的人來反應。<br>選完之後會一直維持,想換回來再點一次 🎭。</p>
+    <div id="awPick" style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn ${!asWhoId ? 'primary' : ''}" data-id="" style="justify-content:flex-start">🧑 ${esc(S.settings.persona.name || '你自己')}(你的 Persona)</button>
+      ${list.map(c => `<button class="btn ${asWhoId === c.id ? 'primary' : ''}" data-id="${c.id}" style="justify-content:flex-start">🎭 ${esc(c.name)}</button>`).join('')}
+    </div>
+    ${list.length ? '' : '<p style="font-size:12px;color:var(--muted);margin-top:10px">還沒有任何角色卡,先去「角色」分頁建立。</p>'}`,
+    [{ label: '取消', onClick: c => c() }]);
+  m.root.querySelectorAll('#awPick [data-id]').forEach(b => b.onclick = () => {
+    const id = b.dataset.id;     // 先讀值再 close(),close() 會清空 innerHTML
+    m.close();
+    asWhoSet(id);
+    toast(asWhoId ? `🎭 接下來你講的話算是「${asWhoName()}」說的` : '🧑 換回你自己的身分', 4000);
+    $('#input').focus();
+  });
+}
+/* 🎬 主對話框的旁白模式:打的是「實際發生的事」,不是使用者說的話 */
+let mainNarrMode = false;
+function mainNarrSet(on) {
+  mainNarrMode = !!on;
+  const b = $('#btnNarr'); if (b) b.classList.toggle('on', mainNarrMode);
+  const t = $('#input');
+  if (t) t.placeholder = mainNarrMode
+    ? '🎬 旁白:實際發生的事(例:楊過舉起劍、天色暗了下來)…Enter 送出'
+    : '輸入訊息…(Enter 送出,Shift+Enter 換行)';
+}
 function onSend() {
   if (generating) { stopGeneration(); return; }
   const chat = activeChat();
   if (!chat) { toast('先建立或選擇一個聊天'); return; }
   const text = $('#input').value.trim();
   if (text) {
-    chat.messages.push({ id: uid(), role: 'user', swipes: [{ text, status: '' }], swipeIndex: 0, ts: Date.now(), im: chat.imWith ? 1 : undefined });
+    chat.messages.push({ id: uid(), role: 'user', swipes: [{ text, status: '' }], swipeIndex: 0, ts: Date.now(), im: chat.imWith ? 1 : undefined, narr: mainNarrMode ? 1 : undefined, asChar: (!mainNarrMode && asWhoId && getChar(asWhoId)) ? asWhoId : undefined });
     chat.updatedAt = Date.now();
     chat.scrollPos = null; // 送出新訊息 → 回到底部
     $('#input').value = ''; autosize();
@@ -6813,6 +6902,14 @@ function bindEvents() {
   $('#btnSeq').onclick = openSeqComposer;
   $('#btnAutoPlay').onclick = openAutoPlay;
   // 💬 通訊軟體
+  $('#btnAsWho').onclick = () => { if (asWhoId) { asWhoSet(null); toast('🧑 換回你自己的身分'); } else openAsWhoPicker(); };
+  $('#btnNarr').onclick = () => {
+    mainNarrSet(!mainNarrMode);
+    toast(mainNarrMode
+      ? '🎬 旁白模式:接下來打的是【實際發生的事】(某人做了什麼、環境變化),不是你說的話。再按一次切回來'
+      : '💬 一般模式:接下來打的是你說的話', 4500);
+    $('#input').focus();
+  };
   $('#btnIM').onclick = () => {
     const chat = activeChat();
     if (!chat) { toast('先建立或選擇一個聊天'); return; }
