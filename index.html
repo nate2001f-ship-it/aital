@@ -486,14 +486,18 @@ label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 4px}
 /* ===== 💬 通訊軟體(LINE 風)視窗 ===== */
 #btnIM{align-self:flex-end;width:34px;height:34px;flex:0 0 auto;border:1px solid var(--border)}
 #btnIM.on{background:#06c755;border-color:#06c755;color:#fff}
-#imScreen{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px}
+/* ⚠ z-index 要低於 modalRoot(100) —— 本來設 9000,結果點氣泡叫出來的操作選單
+   開在 LINE 視窗【後面】,看起來就像點了沒反應(實測踩到)。
+   排序:舞台浮層 55 < 側欄 60 < 通訊視窗 95 < modal 100/140 < toast 200 < 鎖定畫面 9999 */
+#imScreen{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px}
 #imScreen.hidden{display:none}
 #imPhone{width:min(460px,100%);height:min(860px,100%);display:flex;flex-direction:column;
   background:#8cabd9;border-radius:14px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.5)}
 #imHead{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#1f2733;color:#fff;flex:0 0 auto}
 #imHead #imBack{background:none;border:0;color:#fff;font-size:26px;line-height:1;cursor:pointer;padding:0 4px}
-#imHead .im-hbtn{background:none;border:0;color:#fff;font-size:16px;cursor:pointer;opacity:.85}
+#imHead .im-hbtn{background:none;border:0;color:#fff;font-size:16px;cursor:pointer;opacity:.85;padding:2px 4px}
 #imHead .im-hbtn:hover{opacity:1}
+#imHead .im-hbtn.on{opacity:1;color:#06c755}
 #imAvatar{width:34px;height:34px;border-radius:50%;background:#4a5568 center/cover no-repeat;flex:0 0 auto;
   display:flex;align-items:center;justify-content:center;font-size:15px}
 #imName{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -557,7 +561,7 @@ body.locked{overflow:hidden}
 <div id="app">
   <aside id="sidebar">
     <div id="sideHead">
-      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v87</span></div>
+      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v89</span></div>
     </div>
     <div class="side-tabs">
       <button data-tab="chars" class="active">角色</button>
@@ -842,6 +846,8 @@ body.locked{overflow:hidden}
         <div id="imName">—</div>
         <div id="imSub">線上</div>
       </div>
+      <button id="imAuto" class="im-hbtn" title="自動續聊:讓對方自己一直傳訊息過來(會連續呼叫 API,你一打字就停)">♾</button>
+      <button id="imMore" class="im-hbtn" title="讓對方接著上面的話題再傳一則(你不用先回)">💬＋</button>
       <button id="imRegen" class="im-hbtn" title="讓對方重講一次(重新生成最後一則)">🔄</button>
     </div>
     <div id="imBody"></div>
@@ -1799,6 +1805,13 @@ function buildContext(chat, targetCharId, opts = {}) {
       `・像真的在傳訊息那樣寫:句子短、口語、可以不完整。想連傳好幾則就用【換行】分隔,程式會自動拆成一則一則的訊息氣泡(建議 1~4 則)。`,
       `・可以用少量表情符號或顏文字,但必須符合這個角色會不會這樣打字(冷淡的人就不要用)。`,
       `・情境合理時可以有通訊軟體才有的行為:回得很慢很短、只回一個字、已讀不回的敷衍、打錯字、傳到一半改口、說「等等我在忙」。`,
+      `【不要只當一問一答的客服】真人傳訊息是會自己往下推的。除了回答對方,你還應該主動做這些事(每則挑一兩樣,不要每樣都來):
+　・回完之後接著講自己的事:剛剛發生什麼、看到什麼、現在在幹嘛、心情如何
+　・反問回去,或追問對方剛剛講到一半的東西
+　・想到不相干的事就插話(「對了」「啊我忘記跟你說」),這很自然
+　・話題聊完了或對方只回短句時,【自己開一個新話題】——約時間、抱怨、分享、提議做什麼、翻舊帳、講八卦,只要符合這個角色和你們的關係
+　・偶爾不接話,反過來丟一句沒頭沒尾的(「欸」「你睡了嗎」「剛剛那個」)
+但也不要每則都問問題,連續問三句會像查戶口;有時候就只是講一句自己的話,讓對方接。`,
       `・角色的說話規範、口癖、自稱在這裡【照樣適用】,只是換成打字的形式。`,
       `・${persona.name || '使用者'}的訊息前面若有「(手機訊息)」,那只是標示那則是用通訊軟體傳的,是給你辨識用的。【你自己的回覆絕對不可以加這種前綴】,也不要加任何名字前綴,直接從訊息內容第一個字開始寫。`,
     ];
@@ -1845,7 +1858,11 @@ ${banList.map(w => `・${w}`).join('\n')}
     return { role: 'assistant', content: group ? `${(c ? c.name : '?')}: ${t}` : t };
   }).filter(m => m.content && m.content.trim());
 
-  if (opts.continueLast) {
+  if (opts.imMore) {
+    /* 💬 讓對方自己接著講:不用使用者先回話,角色再傳一則。
+       通訊軟體裡本來就會這樣——沒等到回覆就自己補一句、追問、改口。*/
+    messages.push({ role: 'user', content: `[${persona.name || '對方'}還沒有回你。你決定不等了,再傳一則訊息過去。可以是補一句、追問、換個說法、想到什麼又說、或是忍不住抱怨一句;也可以只是很短的一句。內容要接續上面的話題自然發展,不要重複已經傳過的內容,也不要替${persona.name || '對方'}說話或假設對方回了什麼。]` });
+  } else if (opts.continueLast) {
     messages.push({ role: 'user', content: `[請直接接續你上一則回覆繼續寫下去,不要重複已寫過的內容,不要加任何開場白]` });
   } else if (group) {
     messages.push({ role: 'user', content: `[接下來輪到 ${target.name} 回應]` });
@@ -2037,7 +2054,10 @@ async function readSSE(resp, extract, onDelta) {
   return full;
 }
 
-function stopGeneration() { if (abortCtl) { abortCtl.abort(); abortCtl = null; } }
+function stopGeneration() {
+  try { imAutoStop(); } catch (e) {}   // 按停止也要停掉自動續聊
+  if (abortCtl) { abortCtl.abort(); abortCtl = null; }
+}
 
 /* ================= 模型清單與價格 ================= */
 /* 內建參考價:USD / 百萬 tokens(輸入, 輸出)。OpenRouter 等會回傳即時價格則以即時為準 */
@@ -4929,6 +4949,7 @@ function imOpen(charId) {
   imSyncBtn();   // ⚠ 這裡不能呼叫 renderChat():renderChat 會回頭呼叫 imOpen,變成無限遞迴
 }
 function imClose() {
+  imAutoStop();                       // 關視窗一定要停,不然會在背景繼續燒 token
   const chat = activeChat();
   if (chat) { chat.imWith = null; save(); }
   $('#imScreen').classList.add('hidden');
@@ -4950,7 +4971,7 @@ function imRender() {
   if (!list.length) {
     const e = document.createElement('div');
     e.className = 'im-empty';
-    e.innerHTML = `跟「${esc(c ? c.name : '對方')}」的通訊軟體對話<br>傳第一則訊息開始吧<br><span style="font-size:11.5px;opacity:.8">對方記得你們先前發生過的事</span>`;
+    e.innerHTML = `跟「${esc(c ? c.name : '對方')}」的通訊軟體對話<br>傳第一則訊息開始吧<br><span style="font-size:11.5px;opacity:.8">對方記得你們先前發生過的事<br>點任何一則訊息可以編輯／重新生成／刪除<br>右上 💬＋ 讓對方自己接著講、🎬 切換成下旁白</span>`;
     box.appendChild(e);
     return;
   }
@@ -5023,7 +5044,7 @@ function imRender() {
     box.appendChild(row);
   }
   box.scrollTop = box.scrollHeight;
-  $('#imSub').textContent = generating ? '輸入中…' : '線上';
+  $('#imSub').textContent = generating ? '輸入中…' : (imAuto ? `自動續聊中(還剩 ${imAutoLeft} 則)` : '線上');
   const sb = $('#imSend'); if (sb) sb.disabled = generating;
 }
 /* 點任一則訊息的操作選單:複製 / 編輯 / 重新生成 / 刪除
@@ -5082,6 +5103,7 @@ function imSend() {
   chat.updatedAt = Date.now();
   chat.scrollPos = null;
   el.value = ''; el.style.height = 'auto';
+  imAutoStop();                       // 你自己說話了,這一輪自動續聊結束
   save(); imRender(); renderMsgs();
   generate(chat.imWith);
 }
@@ -5090,6 +5112,55 @@ function imRegen() {
   const last = chat.messages[chat.messages.length - 1];
   if (!last || last.role !== 'char') { toast('最後一則不是對方傳的,沒得重新生成'); return; }
   generate(last.charId, { regen: true });
+}
+/* 💬＋ 讓對方自己接著講(不用你先回) */
+function imMoreMsg() {
+  const chat = activeChat(); if (!chat || !chat.imWith) return;
+  if (generating) { toast('正在生成,等一下'); return; }
+  if (!chat.messages.some(m => m.im)) { toast('先傳一則訊息開個頭,對方才知道要接什麼'); return; }
+  generate(chat.imWith, { imMore: true });
+}
+/* ♾ 自動續聊:讓對方像真人一樣自己一直傳訊息過來,不用你每次按。
+   ⚠ 每一則都是一次 API 呼叫,會花錢,所以:
+     ・有【連續上限】,到了就自動停下來等你
+     ・你一開始打字就停(不要在人家要回話時還一直插話)
+     ・關視窗、換聊天、出錯、按停止 都會停
+   這些保護缺一不可,不然會在背景無限燒 token。*/
+let imAuto = false;
+let imAutoLeft = 0;
+let imAutoTimer = null;
+const IM_AUTO_MAX = 4;          // 一輪最多連傳幾則
+function imAutoSet(on) {
+  imAuto = !!on;
+  imAutoLeft = imAuto ? IM_AUTO_MAX : 0;
+  clearTimeout(imAutoTimer); imAutoTimer = null;
+  const b = $('#imAuto');
+  if (b) { b.classList.toggle('on', imAuto); b.textContent = imAuto ? '⏸' : '♾'; }
+  const sub = $('#imSub');
+  if (sub && !generating) sub.textContent = imAuto ? `自動續聊中(還剩 ${imAutoLeft} 則)` : '線上';
+}
+function imAutoStop(why) {
+  if (!imAuto) return;
+  imAutoSet(false);
+  if (why) toast(why, 3500);
+}
+function imAutoTick() {
+  clearTimeout(imAutoTimer); imAutoTimer = null;
+  if (!imAuto) return;
+  const chat = activeChat();
+  const scr = $('#imScreen');
+  // 視窗關了、換聊天了、正在生成 → 不要排下一則
+  if (!chat || !chat.imWith || !scr || scr.classList.contains('hidden') || generating) { imAutoStop(); return; }
+  if (imAutoLeft <= 0) { imAutoSet(false); toast('💬 自動續聊告一段落,換你說話了(再按 ♾ 可以繼續)', 4000); return; }
+  const sub = $('#imSub'); if (sub) sub.textContent = `自動續聊中(還剩 ${imAutoLeft} 則)`;
+  // 隔一段隨機時間再傳,比較像真人在打字
+  imAutoTimer = setTimeout(() => {
+    if (!imAuto || generating) return;
+    const c2 = activeChat();
+    if (!c2 || !c2.imWith) { imAutoStop(); return; }
+    imAutoLeft--;
+    generate(c2.imWith, { imMore: true });
+  }, 1200 + Math.random() * 2600);
 }
 /* 模型有時會把上下文裡的「(手機訊息)」標記複述進回覆,開頭剝掉(踩過) */
 /* 剝掉模型複述的訊息標記。
@@ -5328,7 +5399,7 @@ async function generate(charId, opts = {}) {
   chat.scrollPos = null; // 有新內容 → 回到底部,不要停在舊位置
   const ctxMsgs = opts.cont ? chat.messages : chat.messages.slice(0, -1);
   const ctxUpTo = Math.min(chat.summaryUpTo || 0, ctxMsgs.length);
-  const ctx = buildContext({ ...chat, messages: ctxMsgs, summaryUpTo: ctxUpTo }, charId, { continueLast: opts.cont });
+  const ctx = buildContext({ ...chat, messages: ctxMsgs, summaryUpTo: ctxUpTo }, charId, { continueLast: opts.cont, imMore: opts.imMore });
   // 重新生成:隨機換角度 + 把先前版本原文列出來要求避開 + 拉高溫度
   if (opts.regen) {
     const pool = REGEN_ANGLES.slice();
@@ -5469,6 +5540,7 @@ async function generate(charId, opts = {}) {
     streamMsgEl = null;
     stageGenCharId = null;
     renderMsgs(); renderStatus(); renderSidebar(); renderStage();
+    imAutoTick();   // 💬 自動續聊:這一則傳完了,看要不要讓對方再傳一則
   }
 }
 const m2id = m => m.id;
@@ -6762,6 +6834,14 @@ function bindEvents() {
   $('#imBack').onclick = imClose;
   $('#imSend').onclick = imSend;
   $('#imRegen').onclick = imRegen;
+  $('#imMore').onclick = imMoreMsg;
+  $('#imAuto').onclick = () => {
+    const chat = activeChat();
+    if (!imAuto && (!chat || !chat.messages.some(m => m.im))) { toast('先傳一則訊息開個頭'); return; }
+    imAutoSet(!imAuto);
+    if (imAuto) { toast(`♾ 自動續聊開啟:對方會自己連傳最多 ${IM_AUTO_MAX} 則。你一開始打字就會停。`, 5000); imAutoTick(); }
+    else toast('已停止自動續聊');
+  };
   $('#imMode').onclick = () => {
     imSetMode(!imNarrMode);
     toast(imNarrMode
@@ -6775,6 +6855,8 @@ function bindEvents() {
   $('#imInput').addEventListener('input', e => {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px';
+    // 你一開始打字就停止自動續聊 —— 不要在你要回話時還一直插話
+    if (imAuto && e.target.value.trim()) imAutoStop('⏸ 你開始打字了,自動續聊先停下來');
   });
   $('#seqBarStop').onclick = () => { seqCancel = true; stopGeneration(); };
   $('#chText').addEventListener('keydown', e => {
