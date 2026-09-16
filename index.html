@@ -263,9 +263,16 @@ label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 4px}
   #hdrRest .icon-btn::after{content:attr(title);font-size:13px;margin-left:9px;color:var(--text)}
   #chatTitle{font-size:14px}
   .hdr-sel{max-width:42vw}
-  /* 輸入列的功能鈕縮小一點,才塞得下輸入框 */
-  #inputBar .icon-btn{width:30px;height:30px;font-size:15px}
-  #input{font-size:16px}            /* iOS:小於 16px 會自動放大整頁 */
+  /* 手機的輸入列:功能鈕自己一排,輸入框+送出獨佔下面一整排。
+     本來全部擠在同一排,輸入框被七顆鈕壓到只剩一點寬度,根本沒辦法打字。*/
+  #inputBar{flex-wrap:wrap;gap:6px;align-items:center}
+  #inputBar .icon-btn{width:34px;height:34px;font-size:16px;order:1}
+  /* 這個假元素撐滿一整行,強制換行 —— 功能鈕留在第一排,輸入框從第二排開始 */
+  #inputBar::after{content:'';flex:0 0 100%;height:0;order:2}
+  /* flex-basis 要給 0,給 auto 的話 textarea 會照自己的內容寬度撐滿整行,
+     把送出鈕擠到第三排(實測過) */
+  #input{order:3;flex:1 1 0;min-width:0;font-size:16px;min-height:42px}  /* iOS:小於 16px 會自動放大整頁 */
+  #btnSend{order:4;flex:0 0 auto;padding:0 16px;min-height:42px;white-space:nowrap}
   #imInput{font-size:16px}
 }
 /* 手機上的立繪/場景:改成蓋在上面的浮層,不再直接隱藏 */
@@ -550,7 +557,7 @@ label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 4px}
 .msg.narr .msg-text{font-style:italic;color:var(--muted)}
 .msg.narr{border-left:3px solid var(--border)}
 #btnNarr.on,#btnAsWho.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-#btnNarr,#btnAsWho{align-self:flex-end;width:34px;height:34px;flex:0 0 auto;border:1px solid var(--border)}
+#btnNarr,#btnAsWho,#btnGoOn{align-self:flex-end;width:34px;height:34px;flex:0 0 auto;border:1px solid var(--border)}
 #lockScreen{position:fixed;inset:0;z-index:9999;background:#0b0b0e}
 #lockScreen.gone{opacity:0;pointer-events:none;transition:opacity .25s}
 body.locked{overflow:hidden}
@@ -569,7 +576,7 @@ body.locked{overflow:hidden}
 <div id="app">
   <aside id="sidebar">
     <div id="sideHead">
-      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v92</span></div>
+      <div id="logo">🎭 AI對話<span>訓練</span> <span style="font-size:10.5px;color:var(--muted);font-weight:400">v93</span></div>
     </div>
     <div class="side-tabs">
       <button data-tab="chars" class="active">角色</button>
@@ -812,7 +819,8 @@ body.locked{overflow:hidden}
       <button id="btnIM" class="icon-btn" title="💬 打通訊軟體:開一個像 LINE 的視窗傳訊息,角色知道自己在打字,記憶沿用這場對話">💬</button>
       <button id="btnNarr" class="icon-btn" title="🎬 旁白模式:接下來打的是【實際發生的事】(某人做了什麼、環境變化),不是你說的話">🎬</button>
       <button id="btnAsWho" class="icon-btn" title="用誰的身分說話:預設是你自己,可以臨時改成扮演某個角色">🧑</button>
-      <textarea id="input" rows="1" placeholder="輸入訊息…(Enter 送出,Shift+Enter 換行)"></textarea>
+      <button id="btnGoOn" class="icon-btn" title="▶ 讓角色自己演下去:你不用出手,他會依照目前的處境把劇情往前推一步">▶</button>
+      <textarea id="input" rows="1" placeholder="輸入訊息…(Enter 送出)"></textarea>
       <button id="btnSend" class="btn primary">送出</button>
     </div>
   </div>
@@ -1799,7 +1807,10 @@ function buildContext(chat, targetCharId, opts = {}) {
     ? '回覆格式:你正在手機上打字,輸出的就是訊息內容本身。不要用「」或『』括住(訊息不需要引號),不要寫動作、神態、場景、旁白或內心獨白,不要用星號或括號描述行為。想表達情緒就用文字、標點或表情符號表達,就像真的在傳訊息一樣。'
     : '回覆格式:說出口的對白用「」括起;內心想法、沒說出口的話用『』括起;動作與場景敘述直接寫成一般文字,不要用星號或斜體標記。');
   // 🎭 使用者臨時扮演其他角色時,要講清楚那個人是誰在操作,否則模型會搶著替他演
-  const actedIds = [...new Set(visible.filter(m => m.role === 'user' && m.asChar).map(m => m.asChar))];
+  /* ⚠ 這裡【不能】用 visible —— 那個變數要到下面組訊息時才宣告,
+     在這裡用會踩到 const 的暫時性死區,直接 ReferenceError 讓 buildContext 整個炸掉,
+     症狀是「角色完全不回話」(踩過)。直接從 chat.messages 算。*/
+  const actedIds = [...new Set(chat.messages.slice(chat.summaryUpTo || 0).filter(m => m.role === 'user' && m.asChar).map(m => m.asChar))];
   const actedNames = actedIds.map(id => (getChar(id) || {}).name).filter(Boolean);
   if (actedNames.length) {
     rules.push(`【由使用者操作的角色】對話紀錄中標著「${actedNames.join('」「')}(由${persona.name || '使用者'}操作)」的發言,是${persona.name || '使用者'}親自扮演那個角色說出來的話,不是你說的、也不是你要演的角色。請把他們當成【現場另一個會說話的人】來反應,絕對不要替他們發言、不要續寫他們的台詞、也不要在回覆裡代他們做決定。`);
@@ -1886,27 +1897,34 @@ ${banList.map(w => `・${w}`).join('\n')}
     return { role: 'assistant', content: group ? `${(c ? c.name : '?')}: ${t}` : t };
   }).filter(m => m.content && m.content.trim());
 
-  if (opts.imMore) {
-    /* 💬 讓對方自己接著講:不用使用者先回話,角色再傳一則。
-       通訊軟體裡本來就會這樣——沒等到回覆就自己補一句、追問、改口。*/
-    messages.push({ role: 'user', content: `[${persona.name || '對方'}還沒有回你。你決定不等了,再傳一則訊息過去。可以是補一句、追問、換個說法、想到什麼又說、或是忍不住抱怨一句;也可以只是很短的一句。內容要接續上面的話題自然發展,不要重複已經傳過的內容,也不要替${persona.name || '對方'}說話或假設對方回了什麼。]` });
-  } else if (opts.continueLast) {
-    messages.push({ role: 'user', content: `[請直接接續你上一則回覆繼續寫下去,不要重複已寫過的內容,不要加任何開場白]` });
-  } else if (group) {
-    messages.push({ role: 'user', content: `[接下來輪到 ${target.name} 回應]` });
-  }
-  /* 🎬 旁白補強。
-     ⚠ 踩過:只在訊息前面加 [旁白] 標籤不夠 —— 那則仍然是 user 角色的訊息,
-       模型看到就當成「有人跟我講這句話」,還會反問「你怎麼知道我在做什麼」。
-       要在【最靠近生成點】的地方再講一次,而且明講「不要回應這句話本身」。*/
-  const lastVisible = visible[visible.length - 1];
-  if (lastVisible && lastVisible.narr) {
-    const nt = msgText(lastVisible);
+  /* 🎬 旁白補強 —— 要排在其他指令【前面】,因為它是在解釋上一則訊息是什麼,
+     而 imMore / goOn 那些是「這次要做什麼」的指令,必須留在最後、離生成點最近。*/
+  const lastVis = visible[visible.length - 1];
+  if (lastVis && lastVis.narr) {
+    const nt = msgText(lastVis);
     messages.push({ role: 'user', content: `[重要:上面那則「${nt.slice(0, 40)}${nt.length > 40 ? '…' : ''}」是【旁白】,是現實中真正發生的事,${chat.imWith ? '不是任何人傳給你的訊息' : `不是${persona.name || '使用者'}說出口的話`}。
 ・把它當成已經發生的事實,直接依照那件事做出反應。
 ・如果旁白寫的是【你自己】的動作,那就是你真的做了那個動作,不要否認、不要驚訝、更不要問別人怎麼知道。
 ・如果是別人的動作,你只有在現場看得到/聽得到的情況下才知道。
 ・【絕對不要】把旁白當成一句話來回應,也不要複述或引用它的文字。]` });
+  }
+
+  if (opts.imMore) {
+    /* 💬 讓對方自己接著講:不用使用者先回話,角色再傳一則。
+       通訊軟體裡本來就會這樣——沒等到回覆就自己補一句、追問、改口。*/
+    messages.push({ role: 'user', content: `[${persona.name || '對方'}還沒有回你。你決定不等了,再傳一則訊息過去。可以是補一句、追問、換個說法、想到什麼又說、或是忍不住抱怨一句;也可以只是很短的一句。內容要接續上面的話題自然發展,不要重複已經傳過的內容,也不要替${persona.name || '對方'}說話或假設對方回了什麼。]` });
+  } else if (opts.goOn) {
+    /* ▶ 主對話框的「自己演下去」:不等使用者出手,依現況把劇情往前推一步 */
+    messages.push({ role: 'user', content: `[${persona.name || '使用者'}這次沒有說話也沒有動作,時間繼續走。請你依照目前的處境、場景、你的心情與剛剛發生的事,【主動把這一幕往前推一步】:
+・可以做點什麼(動作、移動、動手處理眼前的事)、觀察環境、想起某件事、或是打破沉默開口說話
+・可以接續剛才的話題,也可以因為當下的情境自然帶出新的話題或新的狀況
+・要有實際進展,不要只是原地發呆、重複剛剛講過的話、或純粹等對方回應
+・【絕對不要】替${persona.name || '使用者'}說話、描寫${persona.name || '使用者'}的動作或心理,也不要假設對方做了什麼
+・照常用「」寫對白,動作與場景敘述直接寫成一般文字]` });
+  } else if (opts.continueLast) {
+    messages.push({ role: 'user', content: `[請直接接續你上一則回覆繼續寫下去,不要重複已寫過的內容,不要加任何開場白]` });
+  } else if (group) {
+    messages.push({ role: 'user', content: `[接下來輪到 ${target.name} 回應]` });
   }
   if (target.statusEnabled && !opts.continueLast) {
     messages.push({ role: 'user', content: `[格式提醒:這則回覆的最後必須輸出 <status>…</status> 狀態欄]` });
@@ -5443,7 +5461,7 @@ async function generate(charId, opts = {}) {
   chat.scrollPos = null; // 有新內容 → 回到底部,不要停在舊位置
   const ctxMsgs = opts.cont ? chat.messages : chat.messages.slice(0, -1);
   const ctxUpTo = Math.min(chat.summaryUpTo || 0, ctxMsgs.length);
-  const ctx = buildContext({ ...chat, messages: ctxMsgs, summaryUpTo: ctxUpTo }, charId, { continueLast: opts.cont, imMore: opts.imMore });
+  const ctx = buildContext({ ...chat, messages: ctxMsgs, summaryUpTo: ctxUpTo }, charId, { continueLast: opts.cont, imMore: opts.imMore, goOn: opts.goOn });
   // 重新生成:隨機換角度 + 把先前版本原文列出來要求避開 + 拉高溫度
   if (opts.regen) {
     const pool = REGEN_ANGLES.slice();
@@ -6771,7 +6789,7 @@ function asWhoSet(id) {
     b.title = asWhoId ? `現在用「${asWhoName()}」的身分說話(點我換回你自己)` : '用誰的身分說話:預設是你自己,可以臨時改成扮演某個角色';
   }
   const t = $('#input');
-  if (t && !mainNarrMode) t.placeholder = asWhoId ? `以「${asWhoName()}」的身分說…(Enter 送出)` : '輸入訊息…(Enter 送出,Shift+Enter 換行)';
+  if (t && !mainNarrMode) t.placeholder = asWhoId ? `以「${asWhoName()}」的身分說…(Enter 送出)` : '輸入訊息…(Enter 送出)';
 }
 function openAsWhoPicker() {
   const list = S.characters || [];
@@ -6800,7 +6818,7 @@ function mainNarrSet(on) {
   const t = $('#input');
   if (t) t.placeholder = mainNarrMode
     ? '🎬 旁白:實際發生的事(例:楊過舉起劍、天色暗了下來)…Enter 送出'
-    : '輸入訊息…(Enter 送出,Shift+Enter 換行)';
+    : '輸入訊息…(Enter 送出)';
 }
 function onSend() {
   if (generating) { stopGeneration(); return; }
@@ -6903,6 +6921,16 @@ function bindEvents() {
   $('#btnAutoPlay').onclick = openAutoPlay;
   // 💬 通訊軟體
   $('#btnAsWho').onclick = () => { if (asWhoId) { asWhoSet(null); toast('🧑 換回你自己的身分'); } else openAsWhoPicker(); };
+  $('#btnGoOn').onclick = () => {
+    const chat = activeChat();
+    if (!chat) { toast('先建立或選擇一個聊天'); return; }
+    if (generating) { toast('正在生成,等一下'); return; }
+    const chars = chat.characterIds.map(getChar).filter(Boolean);
+    if (!chars.length) { toast('房間裡還沒有角色'); return; }
+    if (chars.length === 1) { generate(chars[0].id, { goOn: true }); return; }
+    // 群聊:讓最久沒說話的那位接手,跟自動回覆的挑人邏輯一致
+    generate(pickAutoResponder(chat, ''), { goOn: true });
+  };
   $('#btnNarr').onclick = () => {
     mainNarrSet(!mainNarrMode);
     toast(mainNarrMode
